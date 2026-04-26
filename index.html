@@ -2,33 +2,261 @@
 <html>
 <head>
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>Socket.IO chat</title>
+  <title>Chat</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
   <style>
-      body { margin: 0; padding-bottom: 3rem; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    :root {
+      --bg: #f5f0eb;
+      --surface: #ffffff;
+      --surface2: #ede8e2;
+      --accent: #c0622f;
+      --accent-soft: #f0ddd3;
+      --text: #1e1a17;
+      --text-muted: #8a7f77;
+      --bubble-out: #c0622f;
+      --bubble-in: #ffffff;
+      --shadow: 0 4px 24px rgba(0,0,0,0.08);
+      --radius: 20px;
+    }
 
-      #form { background: rgba(0, 0, 0, 0.15); padding: 0.25rem; position: fixed; bottom: 0; left: 0; right: 0; display: flex; height: 3rem; box-sizing: border-box; backdrop-filter: blur(10px); }
-      #input { border: none; padding: 0 1rem; flex-grow: 1; border-radius: 2rem; margin: 0.25rem; }
-      #input:focus { outline: none; }
-      #form > button { background: #333; border: none; padding: 0 1rem; margin: 0.25rem; border-radius: 3px; outline: none; color: #fff; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-      #messages { list-style-type: none; margin: 0; padding: 0; }
-      #messages > li { padding: 0.5rem 1rem; }
-      #messages > li:nth-child(odd) { background: #efefef; }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23c0622f' fill-opacity='0.04'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    }
+
+    /* ── Header ── */
+    #header {
+      background: var(--surface);
+      padding: 1rem 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.06);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    #header .avatar {
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      background: var(--accent);
+      display: flex; align-items: center; justify-content: center;
+      color: white; font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    #header .info h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 1rem;
+      color: var(--text);
+      line-height: 1.2;
+    }
+
+    #header .info span {
+      font-size: 0.7rem;
+      color: #6cbf6c;
+      font-weight: 500;
+      letter-spacing: 0.03em;
+    }
+
+    .dot {
+      display: inline-block;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #6cbf6c;
+      margin-right: 4px;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* ── Messages ── */
+    #messages {
+      list-style: none;
+      flex: 1;
+      padding: 1.5rem 1rem 6rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+
+    #messages li {
+      display: flex;
+      animation: pop-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    }
+
+    @keyframes pop-in {
+      from { opacity: 0; transform: translateY(10px) scale(0.95); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* Alternate: even = sent (right), odd = received (left) */
+    #messages li:nth-child(odd) {
+      justify-content: flex-start;
+    }
+    #messages li:nth-child(even) {
+      justify-content: flex-end;
+    }
+
+    .bubble {
+      max-width: 72%;
+      padding: 0.65rem 1rem;
+      border-radius: var(--radius);
+      font-size: 0.93rem;
+      line-height: 1.5;
+      position: relative;
+      word-break: break-word;
+    }
+
+    /* Received */
+    #messages li:nth-child(odd) .bubble {
+      background: var(--bubble-in);
+      color: var(--text);
+      border-bottom-left-radius: 5px;
+      box-shadow: var(--shadow);
+    }
+
+    /* Sent */
+    #messages li:nth-child(even) .bubble {
+      background: var(--bubble-out);
+      color: #fff;
+      border-bottom-right-radius: 5px;
+      box-shadow: 0 4px 16px rgba(192, 98, 47, 0.35);
+    }
+
+    /* ── Time stamp ── */
+    .bubble::after {
+      display: block;
+      font-size: 0.65rem;
+      margin-top: 4px;
+      opacity: 0.55;
+    }
+
+    /* ── Form ── */
+    #form {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      padding: 0.75rem 1rem;
+      background: rgba(245, 240, 235, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-top: 1px solid rgba(0,0,0,0.06);
+      display: flex;
+      gap: 0.6rem;
+      align-items: center;
+    }
+
+    #input {
+      flex: 1;
+      border: 1.5px solid transparent;
+      background: var(--surface);
+      border-radius: 2rem;
+      padding: 0.7rem 1.2rem;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.93rem;
+      color: var(--text);
+      outline: none;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    #input::placeholder { color: var(--text-muted); }
+
+    #input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 2px 12px rgba(192, 98, 47, 0.18);
+    }
+
+    #form button {
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      border: none;
+      background: var(--accent);
+      color: white;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 14px rgba(192, 98, 47, 0.4);
+      transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+      flex-shrink: 0;
+    }
+
+    #form button:hover {
+      transform: scale(1.08);
+      box-shadow: 0 6px 20px rgba(192, 98, 47, 0.5);
+    }
+
+    #form button:active {
+      transform: scale(0.95);
+    }
+
+    #form button svg {
+      width: 20px; height: 20px;
+      fill: none;
+      stroke: white;
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    /* Empty state */
+    #empty {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    #empty .icon { font-size: 2.5rem; margin-bottom: 0.25rem; }
+    #empty strong { font-family: 'Playfair Display', serif; color: var(--text); font-size: 1.1rem; }
   </style>
 </head>
 <body>
-  <ul id="messages"></ul>
+
+  <div id="header">
+    <div class="avatar">💬</div>
+    <div class="info">
+      <h2>Group Chat</h2>
+      <span><span class="dot"></span>Online</span>
+    </div>
+  </div>
+
+  <ul id="messages">
+    <li id="empty-state">
+      <div id="empty">
+        <div class="icon">✦</div>
+        <strong>Say something!</strong>
+        <span>Messages will appear here</span>
+      </div>
+    </li>
+  </ul>
+
   <form id="form" action="">
-    <input id="input" autocomplete="off" /><button>Send</button>
+    <input id="input" autocomplete="off" placeholder="Type a message…" />
+    <button type="submit" aria-label="Send">
+      <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+    </button>
   </form>
+
   <script src="/socket.io/socket.io.js"></script>
   <script>
     let counter = 0;
 
     const socket = io({
-      auth: {
-        serverOffset: 0
-      },
+      auth: { serverOffset: 0 },
       ackTimeout: 10000,
       retries: 3,
     });
@@ -36,21 +264,30 @@
     const form = document.getElementById('form');
     const input = document.getElementById('input');
     const messages = document.getElementById('messages');
+    const emptyState = document.getElementById('empty-state');
+
+    function removeEmpty() {
+      if (emptyState && emptyState.parentNode) emptyState.remove();
+    }
 
     form.addEventListener('submit', (e) => {
       e.preventDefault();
-      if (input.value) {
+      if (input.value.trim()) {
         const clientOffset = `${socket.id}-${counter++}`;
-        socket.emit('chat message', input.value, clientOffset);
+        socket.emit('chat message', input.value.trim(), clientOffset);
         input.value = '';
       }
     });
 
     socket.on('chat message', (msg, serverOffset) => {
+      removeEmpty();
       const item = document.createElement('li');
-      item.textContent = msg;
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.textContent = msg;
+      item.appendChild(bubble);
       messages.appendChild(item);
-      window.scrollTo(0, document.body.scrollHeight);
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
       socket.auth.serverOffset = serverOffset;
     });
   </script>
