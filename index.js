@@ -12,11 +12,8 @@ import { createAdapter, setupPrimary } from '@socket.io/cluster-adapter';
 if (cluster.isPrimary) {
   const numCPUs = availableParallelism();
   for (let i = 0; i < numCPUs; i++) {
-    cluster.fork({
-      PORT: 3000 + i
-    });
+    cluster.fork({ PORT: 3000 + i });
   }
-
   setupPrimary();
 } else {
   const db = await open({
@@ -28,7 +25,8 @@ if (cluster.isPrimary) {
     CREATE TABLE IF NOT EXISTS messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       client_offset TEXT UNIQUE,
-      content TEXT
+      content TEXT,
+      user_id TEXT
     );
   `);
 
@@ -46,52 +44,46 @@ if (cluster.isPrimary) {
   });
 
   io.on('connection', async (socket) => {
+    const userId = socket.id;
+
     socket.on('chat message', async (msg, clientOffset, callback) => {
       let result;
       try {
-        result = await db.run('INSERT INTO messages (content, client_offset) VALUES (?, ?)', msg, clientOffset);
+        result = await db.run(
+          'INSERT INTO messages (content, client_offset, user_id) VALUES (?, ?, ?)',
+          msg, clientOffset, userId
+        );
       } catch (e) {
-        if (e.errno === 19 /* SQLITE_CONSTRAINT */ ) {
-          callback();
-        } else {
-          // nothing to do, just let the client retry
-        }
+        if (e.errno === 19) { callback(); }
         return;
       }
-      io.emit('chat message', msg, result.lastID);
+      io.emit('chat message', msg, result.lastID, userId);
       callback();
     });
 
-    // ── Clear chat ──────────────────────────────────────────────
     socket.on('clear chat', async () => {
       try {
         await db.run('DELETE FROM messages');
-        // Reset the autoincrement counter so IDs start fresh
         await db.run("DELETE FROM sqlite_sequence WHERE name='messages'");
-        // Tell every connected client to wipe their screen
         io.emit('chat cleared');
       } catch (e) {
         console.error('Failed to clear chat:', e);
       }
     });
-    // ────────────────────────────────────────────────────────────
 
     if (!socket.recovered) {
       try {
-        await db.each('SELECT id, content FROM messages WHERE id > ?',
+        await db.each('SELECT id, content, user_id FROM messages WHERE id > ?',
           [socket.handshake.auth.serverOffset || 0],
           (_err, row) => {
-            socket.emit('chat message', row.content, row.id);
+            socket.emit('chat message', row.content, row.id, row.user_id || 'unknown');
           }
-        )
-      } catch (e) {
-        // something went wrong
-      }
+        );
+      } catch (e) {}
     }
   });
 
   const port = process.env.PORT;
-
   server.listen(port, () => {
     console.log(`server running at http://localhost:${port}`);
   });
