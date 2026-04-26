@@ -62,6 +62,20 @@ if (cluster.isPrimary) {
       callback();
     });
 
+    // ── Clear chat ──────────────────────────────────────────────
+    socket.on('clear chat', async () => {
+      try {
+        await db.run('DELETE FROM messages');
+        // Reset the autoincrement counter so IDs start fresh
+        await db.run("DELETE FROM sqlite_sequence WHERE name='messages'");
+        // Tell every connected client to wipe their screen
+        io.emit('chat cleared');
+      } catch (e) {
+        console.error('Failed to clear chat:', e);
+      }
+    });
+    // ────────────────────────────────────────────────────────────
+
     if (!socket.recovered) {
       try {
         await db.each('SELECT id, content FROM messages WHERE id > ?',
