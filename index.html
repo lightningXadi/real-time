@@ -174,8 +174,8 @@
       to   { opacity: 1; transform: translateY(0) scale(1); }
     }
 
-    #messages li:nth-child(odd)  { justify-content: flex-start; }
-    #messages li:nth-child(even) { justify-content: flex-end; }
+    #messages li.own   { justify-content: flex-end; }
+    #messages li.other { justify-content: flex-start; }
 
     .bubble {
       max-width: 72%;
@@ -186,18 +186,39 @@
       word-break: break-word;
     }
 
-    #messages li:nth-child(odd) .bubble {
-      background: var(--bubble-in);
-      color: var(--text);
-      border-bottom-left-radius: 5px;
-      box-shadow: var(--shadow);
-    }
-    #messages li:nth-child(even) .bubble {
+    /* Own messages: always accent */
+    li.own .bubble {
       background: var(--bubble-out);
       color: #fff;
       border-bottom-right-radius: 5px;
       box-shadow: 0 4px 16px rgba(192, 98, 47, 0.35);
     }
+
+    /* Other users: unique colours drawn from the warm theme palette */
+    li.other .bubble {
+      color: #fff;
+      border-bottom-left-radius: 5px;
+      box-shadow: var(--shadow);
+    }
+
+    /* Sender name label */
+    .sender-label {
+      font-size: 0.68rem;
+      font-weight: 600;
+      margin-bottom: 2px;
+      padding: 0 0.4rem;
+      opacity: 0.8;
+    }
+
+    /* 8 warm palette colours matching the terracotta/warm theme */
+    .uc-0 { background: #6b7f3a; } .lc-0 { color: #6b7f3a; } /* olive        */
+    .uc-1 { background: #4a7fa5; } .lc-1 { color: #4a7fa5; } /* slate blue   */
+    .uc-2 { background: #9b4f96; } .lc-2 { color: #9b4f96; } /* dusty purple */
+    .uc-3 { background: #2e8b6e; } .lc-3 { color: #2e8b6e; } /* teal         */
+    .uc-4 { background: #b5782a; } .lc-4 { color: #b5782a; } /* amber        */
+    .uc-5 { background: #c14d6a; } .lc-5 { color: #c14d6a; } /* rose         */
+    .uc-6 { background: #3d6fa8; } .lc-6 { color: #3d6fa8; } /* cornflower   */
+    .uc-7 { background: #7a6e3a; } .lc-7 { color: #7a6e3a; } /* dark gold    */
 
     /* System message */
     .system-msg { justify-content: center !important; }
@@ -364,11 +385,37 @@
       }
     });
 
-    socket.on('chat message', (msg, serverOffset) => {
+    // Per-user colour assignment
+    const userColours = {};
+    const userNames   = {};
+    let nextColour = 0, nextUser = 1;
+
+    function getColour(uid) {
+      if (!(uid in userColours)) { userColours[uid] = nextColour++ % 8; }
+      return userColours[uid];
+    }
+    function getName(uid) {
+      if (!(uid in userNames)) { userNames[uid] = 'Guest ' + nextUser++; }
+      return userNames[uid];
+    }
+
+    socket.on('chat message', (msg, serverOffset, senderId) => {
       removeEmpty();
-      const item   = document.createElement('li');
+      const isOwn = senderId === socket.id;
+      const ci    = getColour(senderId);
+
+      const item = document.createElement('li');
+      item.className = isOwn ? 'own' : 'other';
+
+      if (!isOwn) {
+        const label = document.createElement('div');
+        label.className = `sender-label lc-${ci}`;
+        label.textContent = getName(senderId);
+        item.appendChild(label);
+      }
+
       const bubble = document.createElement('div');
-      bubble.className = 'bubble';
+      bubble.className = isOwn ? 'bubble' : `bubble uc-${ci}`;
       bubble.textContent = msg;
       item.appendChild(bubble);
       messages.appendChild(item);
@@ -388,6 +435,9 @@
     // Server confirmed clear — wipe UI for all clients
     socket.on('chat cleared', () => {
       messages.innerHTML = '';
+      Object.keys(userColours).forEach(k => delete userColours[k]);
+      Object.keys(userNames).forEach(k => delete userNames[k]);
+      nextColour = 0; nextUser = 1;
       const note = document.createElement('li');
       note.className = 'system-msg';
       note.innerHTML = '<span>✦ Chat was cleared</span>';
