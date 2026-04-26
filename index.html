@@ -190,17 +190,17 @@
     li.own .bubble   { border-bottom-right-radius: 5px; }
     li.other .bubble { border-bottom-left-radius: 5px; }
 
-    /* 10 warm-toned colours matching the terracotta theme — everyone gets one */
-    .uc-0 { background: #c0622f; box-shadow: 0 4px 14px rgba(192,98,47,0.35);  } /* terracotta  */
-    .uc-1 { background: #6b7f3a; box-shadow: 0 4px 14px rgba(107,127,58,0.35); } /* olive       */
-    .uc-2 { background: #4a7fa5; box-shadow: 0 4px 14px rgba(74,127,165,0.35); } /* slate blue  */
-    .uc-3 { background: #9b4f96; box-shadow: 0 4px 14px rgba(155,79,150,0.35); } /* mauve       */
-    .uc-4 { background: #2e8b6e; box-shadow: 0 4px 14px rgba(46,139,110,0.35); } /* teal        */
-    .uc-5 { background: #b5782a; box-shadow: 0 4px 14px rgba(181,120,42,0.35); } /* amber       */
-    .uc-6 { background: #c14d6a; box-shadow: 0 4px 14px rgba(193,77,106,0.35); } /* rose        */
-    .uc-7 { background: #5a6fa8; box-shadow: 0 4px 14px rgba(90,111,168,0.35); } /* indigo      */
-    .uc-8 { background: #7a6e3a; box-shadow: 0 4px 14px rgba(122,110,58,0.35); } /* dark gold   */
-    .uc-9 { background: #3d7a5a; box-shadow: 0 4px 14px rgba(61,122,90,0.35);  } /* forest      */
+    /* 10 warm colours matching the terracotta theme */
+    .uc-0 { background: #c0622f; box-shadow: 0 4px 14px rgba(192,98,47,0.35);  }
+    .uc-1 { background: #6b7f3a; box-shadow: 0 4px 14px rgba(107,127,58,0.35); }
+    .uc-2 { background: #4a7fa5; box-shadow: 0 4px 14px rgba(74,127,165,0.35); }
+    .uc-3 { background: #9b4f96; box-shadow: 0 4px 14px rgba(155,79,150,0.35); }
+    .uc-4 { background: #2e8b6e; box-shadow: 0 4px 14px rgba(46,139,110,0.35); }
+    .uc-5 { background: #b5782a; box-shadow: 0 4px 14px rgba(181,120,42,0.35); }
+    .uc-6 { background: #c14d6a; box-shadow: 0 4px 14px rgba(193,77,106,0.35); }
+    .uc-7 { background: #5a6fa8; box-shadow: 0 4px 14px rgba(90,111,168,0.35); }
+    .uc-8 { background: #7a6e3a; box-shadow: 0 4px 14px rgba(122,110,58,0.35); }
+    .uc-9 { background: #3d7a5a; box-shadow: 0 4px 14px rgba(61,122,90,0.35);  }
 
     /* System message */
     .system-msg { justify-content: center !important; }
@@ -367,25 +367,19 @@
       }
     });
 
-    // Per-user colour — everyone including yourself gets a unique colour
-    const userColours = {};
-    let nextColour = 0;
+    // Server tells us our own socket id so we know which side to put our bubbles
+    let myId = null;
+    socket.on('your id', (id) => { myId = id; });
 
-    function getColour(uid) {
-      if (!(uid in userColours)) { userColours[uid] = nextColour++ % 10; }
-      return userColours[uid];
-    }
-
-    socket.on('chat message', (msg, serverOffset, senderId) => {
+    socket.on('chat message', (msg, serverOffset, senderId, colorIndex) => {
       removeEmpty();
-      const isOwn = senderId === socket.id;
-      const ci    = getColour(senderId);
+      const isOwn = senderId === myId;
 
       const item = document.createElement('li');
       item.className = isOwn ? 'own' : 'other';
 
       const bubble = document.createElement('div');
-      bubble.className = `bubble uc-${ci}`;
+      bubble.className = `bubble uc-${colorIndex}`;
       bubble.textContent = msg;
       item.appendChild(bubble);
       messages.appendChild(item);
@@ -405,8 +399,6 @@
     // Server confirmed clear — wipe UI for all clients
     socket.on('chat cleared', () => {
       messages.innerHTML = '';
-      Object.keys(userColours).forEach(k => delete userColours[k]);
-      nextColour = 0;
       const note = document.createElement('li');
       note.className = 'system-msg';
       note.innerHTML = '<span>✦ Chat was cleared</span>';
